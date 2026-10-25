@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CONTROL DE RUTA – Sistema Inteligente para la Gestión de Flota</title>
+<link rel="icon" href="logom.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>tailwind.config={theme:{extend:{colors:{rojo:'#CA102E',azul:'#012169',gris:'#a2a2a2'},fontFamily:{sora:['Sora','sans-serif'],inter:['Inter','sans-serif']}}}}</script>
+<style>
+html{scroll-behavior:smooth;scroll-padding-top:76px}
+body{font-family:Inter,sans-serif;background:#fff;color:#012169;padding-bottom:env(safe-area-inset-bottom)}
+.card{background:#fff;border:1px solid #ececec;border-radius:20px;box-shadow:0 10px 30px -12px rgba(1,33,105,.18);transition:.25s}
+.card:hover{transform:translateY(-3px);box-shadow:0 18px 40px -14px rgba(1,33,105,.28)}
+.chip{display:inline-flex;align-items:center;gap:.35rem;padding:.2rem .65rem;border-radius:99px;font-size:.7rem;font-weight:700;letter-spacing:.02em}
+.ok{background:#e7efff;color:#012169}.bad{background:#fde6ea;color:#CA102E}.neu{background:#f1f1f1;color:#6b6b6b}
+.pill{padding:.45rem .9rem;border-radius:99px;border:1px solid #e3e3e3;font-size:.78rem;font-weight:600;white-space:nowrap;cursor:pointer;transition:.2s;background:#fff}
+.pill.on,.pill:hover{background:#012169;color:#fff;border-color:#012169}
+.nav a{padding:.5rem .85rem;border-radius:12px;font-size:.8rem;font-weight:600;white-space:nowrap;color:#012169;transition:.2s}
+.nav a:hover,.nav a.act{background:#012169;color:#fff}
+.tw{overflow:auto;max-height:560px;border-radius:16px;border:1px solid #eee}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:.78rem}
+th{position:sticky;top:0;background:#012169;color:#fff;padding:.65rem .7rem;text-align:left;white-space:nowrap;cursor:pointer;z-index:2}
+th:first-child,td:first-child{position:sticky;left:0;z-index:1}
+th:first-child{z-index:3}
+td{padding:.55rem .7rem;border-bottom:1px solid #f0f0f0;white-space:nowrap;background:#fff}
+tr:hover td{background:#f5f8ff}
+.sec{padding:3.5rem 0}
+.h2{font-family:Sora;font-weight:800;font-size:clamp(1.4rem,3vw,2rem)}
+.bar{height:8px;border-radius:9px;background:#eee;overflow:hidden}.bar i{display:block;height:100%;border-radius:9px;transition:width 1s}
+input,select{border:1px solid #e3e3e3;border-radius:12px;padding:.5rem .8rem;font-size:.8rem;background:#fff;color:#012169;outline:none}
+input:focus,select:focus{border-color:#CA102E}
+.dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:p 1.6s infinite}
+@keyframes p{50%{opacity:.3;transform:scale(1.5)}}
+.fade{opacity:0;transform:translateY(18px);transition:.7s}.fade.in{opacity:1;transform:none}
+#modal{background:rgba(1,33,105,.55);backdrop-filter:blur(6px)}
+::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:#a2a2a2;border-radius:9px}
+</style>
+</head>
+<body>
+
+<!-- Encabezado -->
+<header class="border-b border-gray-100 bg-white">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+    <img src="logof.png" alt="Logo principal" class="h-14 md:h-20 w-auto object-contain">
+    <img src="logom.png" alt="Logo secundario" class="h-14 md:h-20 w-auto object-contain">
+  </div>
+</header>
+
+<nav class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-gray-100" style="padding-top:env(safe-area-inset-top)">
+  <div class="max-w-7xl mx-auto px-4 py-2 flex items-center gap-2 overflow-x-auto nav" id="nav">
+    <a href="#ejecutivo"><i class="fa-solid fa-gauge-high mr-1"></i>Ejecutivo</a>
+    <a href="#viajes"><i class="fa-solid fa-route mr-1"></i>Viajes</a>
+    <a href="#flota"><i class="fa-solid fa-truck-moving mr-1"></i>Flota</a>
+    <a href="#mantenimiento"><i class="fa-solid fa-screwdriver-wrench mr-1"></i>Mantenimiento</a>
+    <a href="#conductores"><i class="fa-solid fa-id-card-clip mr-1"></i>Conductores</a>
+    <a href="#diccionario"><i class="fa-solid fa-book mr-1"></i>Diccionario</a>
+    <span class="ml-auto flex items-center gap-2 text-xs text-gris whitespace-nowrap"><span class="dot"></span><span id="upd">Cargando…</span>
+      <button onclick="load(true)" class="pill" title="Recargar Excel"><i class="fa-solid fa-rotate"></i></button>
+      <label class="pill" title="Cargar un Excel local"><i class="fa-solid fa-file-excel"></i><input type="file" id="fx" accept=".xlsx" class="hidden"></label>
+    </span>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="relative overflow-hidden">
+  <div class="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-azul/5 blur-3xl"></div>
+  <div class="absolute -bottom-32 right-0 w-96 h-96 rounded-full bg-rojo/5 blur-3xl"></div>
+  <div class="relative max-w-7xl mx-auto px-4 py-10 md:py-16 grid lg:grid-cols-2 gap-10 items-center">
+    <div class="fade">
+      <span class="chip bad mb-4"><i class="fa-solid fa-satellite-dish"></i> TELEMETRÍA · MONITORA</span>
+      <h1 class="font-sora font-extrabold text-3xl md:text-5xl leading-tight">CONTROL DE RUTA <span class="text-rojo">–</span><br><span class="text-rojo">SISTEMA INTELIGENTE</span> PARA LA GESTIÓN DE FLOTA</h1>
+      <p class="mt-4 text-gris text-base md:text-lg max-w-xl">Inteligencia operacional, financiera y de seguridad vial de 15 tractocamiones, sincronizada en vivo con el libro <b class="text-azul">piloto.xlsx</b>.</p>
+      <div class="mt-7 grid grid-cols-2 sm:grid-cols-4 gap-3" id="heroK"></div>
+    </div>
+    <div class="fade">
+      <div class="p-2 rounded-3xl bg-gradient-to-br from-azul via-azul to-rojo shadow-2xl">
+        <video src="video.mp4" autoplay muted loop playsinline controls preload="metadata" class="w-full rounded-2xl bg-black aspect-video object-cover"></video>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main class="max-w-7xl mx-auto px-4">
+
+<!-- 00 EJECUTIVO -->
+<section id="ejecutivo" class="sec">
+  <div class="fade"><p class="chip ok"><i class="fa-solid fa-gauge-high"></i> 00_Tablero_Ejecutivo</p>
+  <h2 class="h2 mt-2">Tablero Gerencial</h2></div>
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-6" id="kpis"></div>
+  <div class="card p-4 mt-6 flex gap-3 items-start"><i class="fa-solid fa-circle-info text-azul mt-1 text-xl"></i><div class="text-sm leading-relaxed"><b>¿Cómo leer este tablero?</b> Cada indicador es como una nota del negocio: se compara el <b>resultado real</b> con la <b>meta</b> que nos propusimos. <span class="chip ok">✔ CUMPLE LA META</span> quiere decir que vamos bien. <span class="chip bad">✖ POR MEJORAR</span> quiere decir que hay que tomar acción. En unos indicadores (como el costo) lo mejor es un número <b>bajo</b>; en otros (como las entregas a tiempo) lo mejor es un número <b>alto</b>. Cada tarjeta lo explica.</div></div>
+  <div class="grid lg:grid-cols-3 gap-4 mt-6">
+    <div class="card p-5 lg:col-span-1"><h3 class="font-bold mb-2">¿Cuántos indicadores cumplen la meta?</h3><div class="h-64"><canvas id="cEst"></canvas></div></div>
+    <div class="card p-5 lg:col-span-2"><h3 class="font-bold mb-2">Avance frente a la meta (100 % = meta lograda)</h3><div class="h-64"><canvas id="cCum"></canvas></div></div>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-8" id="indF">
+    <button class="pill on" data-f="">Todos</button><button class="pill" data-f="CONFORME">✔ Cumplen la meta</button><button class="pill" data-f="DESVIADO">✖ Por mejorar</button>
+  </div>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4" id="ind"></div>
+</section>
+
+<!-- 01 VIAJES -->
+<section id="viajes" class="sec">
+  <p class="chip ok"><i class="fa-solid fa-route"></i> 01_Registro_Viajes</p>
+  <h2 class="h2 mt-2">Operación de Despachos</h2>
+  <div class="card p-4 mt-5 flex flex-wrap gap-2 items-center">
+    <i class="fa-solid fa-filter text-rojo"></i>
+    <input id="q" placeholder="Buscar (ID, ruta, conductor…)" class="flex-1 min-w-[160px]">
+    <select id="fMes"></select><select id="fPla"></select><select id="fCli"></select>
+    <select id="fOtd"><option value="">OTD: todos</option><option>SÍ</option><option>NO</option></select>
+    <button class="pill" onclick="resetV()"><i class="fa-solid fa-eraser"></i> Limpiar</button>
+    <button class="pill" onclick="csv()"><i class="fa-solid fa-download"></i> CSV</button>
+  </div>
+  <div class="grid grid-cols-2 lg:grid-cols-6 gap-3 mt-4" id="vk"></div>
+  <div class="grid lg:grid-cols-2 gap-4 mt-4">
+    <div class="card p-5"><h3 class="font-bold mb-2">Ingresos vs. margen mensual (COP)</h3><div class="h-72"><canvas id="cMes"></canvas></div></div>
+    <div class="card p-5"><h3 class="font-bold mb-2">Estructura de costos</h3><div class="h-72"><canvas id="cCos"></canvas></div></div>
+    <div class="card p-5"><h3 class="font-bold mb-2">Ingresos por cliente</h3><div class="h-72"><canvas id="cCli"></canvas></div></div>
+    <div class="card p-5"><h3 class="font-bold mb-2">% entregas a tiempo (OTD) por mes</h3><div class="h-72"><canvas id="cOtd"></canvas></div></div>
+    <div class="card p-5 lg:col-span-2"><h3 class="font-bold mb-2">Margen por ruta (Top 12)</h3><div class="h-80"><canvas id="cRut"></canvas></div></div>
+  </div>
+  <div class="tw mt-4"><table id="tV"></table></div>
+  <div class="flex items-center justify-between mt-3 text-xs"><span id="pgI" class="text-gris"></span>
+    <span class="flex gap-2"><button class="pill" onclick="pg(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="pill" onclick="pg(1)"><i class="fa-solid fa-chevron-right"></i></button></span></div>
+</section>
+
+<!-- 02 FLOTA -->
+<section id="flota" class="sec">
+  <p class="chip ok"><i class="fa-solid fa-truck-moving"></i> 02_Hoja_Vida_Flota</p>
+  <h2 class="h2 mt-2">Hoja de Vida de los Activos</h2>
+  <div class="flex flex-wrap gap-2 mt-4" id="flF"><button class="pill on" data-f="">Todos</button><button class="pill" data-f="MANTENER">Mantener en operación</button><button class="pill" data-f="REEMPLAZO">Revisión mayor / reemplazo 2027</button></div>
+  <div class="card p-5 mt-4"><h3 class="font-bold mb-2">Disponibilidad mecánica vs. utilización por placa</h3><div class="h-72"><canvas id="cFl"></canvas></div></div>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4" id="fl"></div>
+</section>
+
+<!-- 03 MANTENIMIENTO -->
+<section id="mantenimiento" class="sec">
+  <p class="chip ok"><i class="fa-solid fa-screwdriver-wrench"></i> 03_Mantenimiento</p>
+  <h2 class="h2 mt-2">Taller y Control Mecánico</h2>
+  <div class="card p-4 mt-5 flex flex-wrap gap-2 items-center"><i class="fa-solid fa-filter text-rojo"></i>
+    <select id="mT"></select><select id="mP"></select><select id="mW"></select></div>
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4" id="mk"></div>
+  <div class="grid lg:grid-cols-2 gap-4 mt-4">
+    <div class="card p-5"><h3 class="font-bold mb-2">Costo por tipo de intervención</h3><div class="h-72"><canvas id="cMt"></canvas></div></div>
+    <div class="card p-5"><h3 class="font-bold mb-2">Horas inmovilizado por taller</h3><div class="h-72"><canvas id="cMw"></canvas></div></div>
+  </div>
+  <div class="tw mt-4"><table id="tM"></table></div>
+</section>
+
+<!-- 04 CONDUCTORES -->
+<section id="conductores" class="sec">
+  <p class="chip ok"><i class="fa-solid fa-id-card-clip"></i> 04_Conductores_Seguridad</p>
+  <h2 class="h2 mt-2">PESV y Telemetría de Conducción</h2>
+  <div class="card p-5 mt-5"><div class="font-bold"><i class="fa-solid fa-traffic-light text-rojo mr-1"></i> ¿Cómo leer el semáforo de seguridad?</div>
+  <p class="text-sm text-gris mt-1">El score va de 0 a 100 y mide qué tan seguro maneja cada conductor (velocidad, frenadas y descansos). <b class="text-azul">Entre más alto, más seguro.</b> La meta de la empresa es 85 o más.</p>
+  <div class="grid sm:grid-cols-3 gap-3 mt-3 text-sm">
+   <div class="rounded-2xl p-3" style="background:#16a34a14"><span class="inline-block w-4 h-4 rounded-full align-middle mr-2" style="background:#16a34a"></span><b style="color:#15803d">SEGURO · 85 a 100</b><div class="text-xs mt-1">Conduce bien y cumple la meta. Mantener y felicitar.</div></div>
+   <div class="rounded-2xl p-3" style="background:#f59e0b18"><span class="inline-block w-4 h-4 rounded-full align-middle mr-2" style="background:#f59e0b"></span><b style="color:#b45309">PRECAUCIÓN · 70 a 84</b><div class="text-xs mt-1">Maneja con fallas. Necesita capacitación y seguimiento.</div></div>
+   <div class="rounded-2xl p-3" style="background:#CA102E14"><span class="inline-block w-4 h-4 rounded-full align-middle mr-2" style="background:#CA102E"></span><b style="color:#CA102E">INSEGURO · menos de 70</b><div class="text-xs mt-1">Riesgo alto de accidente. Requiere acción inmediata.</div></div>
+  </div></div>
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4" id="ck"></div>
+  <div class="grid lg:grid-cols-2 gap-4 mt-4">
+    <div class="card p-5"><h3 class="font-bold mb-2">Score de conducción segura</h3><div class="h-80"><canvas id="cSc"></canvas></div></div>
+    <div class="card p-5"><h3 class="font-bold mb-2">Excesos de velocidad por conductor</h3><div class="h-80"><canvas id="cEx"></canvas></div></div>
+  </div>
+  <div class="tw mt-4"><table id="tC"></table></div>
+</section>
+
+<!-- 05 DICCIONARIO -->
+<section id="diccionario" class="sec">
+  <p class="chip ok"><i class="fa-solid fa-book"></i> 05_Diccionario_Indicadores</p>
+  <h2 class="h2 mt-2">Catálogo Maestro MONITORA</h2>
+  <p class="text-gris mt-2 max-w-3xl">Aquí se explica, en palabras sencillas, qué mide cada indicador, cómo se calcula y quién responde por él. <b class="text-azul">Toca una tarjeta para abrirla.</b> Si el indicador existe en el tablero, verás su resultado actual en vivo.</p>
+  <div class="flex flex-wrap gap-2 items-center mt-4"><input id="qd" placeholder="Buscar indicador o responsable…" class="w-full sm:w-80"><button class="pill" onclick="allD()"><i class="fa-solid fa-up-down mr-1"></i><span id="allT">Abrir todas</span></button><span id="dicN" class="text-xs text-gris"></span></div>
+  <div class="flex flex-wrap gap-2 mt-3" id="dicF"></div>
+  <div class="grid md:grid-cols-2 gap-4 mt-4" id="dic"></div>
+</section>
+</main>
+
+<!-- Pie -->
+<footer class="mt-10 border-t border-gray-100 bg-white">
+  <div class="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row items-center justify-between gap-6">
+    <img src="logof.png" alt="Logo principal" class="h-14 md:h-20 w-auto object-contain">
+    <p class="text-xs text-gris text-center">CONTROL DE RUTA · Sistema Inteligente para la Gestión de Flota<br>Datos sincronizados con piloto.xlsx · Metodología MONITORA</p>
+    <img src="logom.png" alt="Logo secundario" class="h-14 md:h-20 w-auto object-contain">
+  </div>
+  <div class="h-1.5 bg-gradient-to-r from-azul via-gris to-rojo"></div>
+</footer>
+
+<div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" onclick="if(event.target===this)closeM()">
+  <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[88vh] overflow-auto p-6 relative">
+    <button onclick="closeM()" class="absolute top-4 right-4 text-gris hover:text-rojo text-xl"><i class="fa-solid fa-xmark"></i></button>
+    <div id="mb"></div></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const R='#CA102E',A='#012169',G='#a2a2a2';
+const num=(n,d=0)=>(+n||0).toLocaleString('es-CO',{maximumFractionDigits:d,minimumFractionDigits:d});
+const cop=n=>'$'+num(n);
+const mil=n=>Math.abs(n)>=1e9?'$'+num(n/1e9,2)+' MM':Math.abs(n)>=1e6?'$'+num(n/1e6,1)+' M':cop(n);
+const pc=(n,d)=>num(n*100,d??(Math.abs(n)<.1&&n!==0?2:1))+'%';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sum=(a,f)=>a.reduce((s,x)=>s+(+f(x)||0),0);
+const grp=(a,k)=>a.reduce((m,x)=>((m[k(x)]=m[k(x)]||[]).push(x),m),{});
+const FILE='piloto.xlsx';
+let S={},sig='',CH={},vSort=[0,1],vPage=0,vF=[];
+Chart.defaults.font.family='Inter';Chart.defaults.color='#555';
+const mk=(id,cfg)=>{CH[id]&&CH[id].destroy();CH[id]=new Chart($('#'+id),{...cfg,options:{responsive:true,maintainAspectRatio:false,...cfg.options}})};
+
+/* Indicadores: formato y sentido (menor es mejor) */
+const LOW=new Set([1,4,8,9,11,14]);
+const fmtI=(i,v)=>{const p=[3,5,6,8,10,13,15];if(p.includes(i))return pc(v);if([1,2,14].includes(i))return cop(v);if(i===7)return num(v,2)+' km/gal';if([4,9].includes(i))return num(v,1)+' h';return num(v,1)};
+const okT=x=>x.s==='CONFORME';
+const stat=t=>chip(t?'✔ CUMPLE LA META':'✖ POR MEJORAR',t?'ok':'bad');
+
+/* Carga y parseo */
+async function load(force){
+  try{
+    const r=await fetch(FILE+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok)throw new Error(r.status);
+    const b=await r.arrayBuffer();
+    const u=new Uint8Array(b);let h=b.byteLength;for(let i=0;i<u.length;i+=7)h=(h*31+u[i])>>>0;
+    if(!force&&h+''===sig)return;sig=h+'';ingest(XLSX.read(b,{type:'array'}));
+  }catch(e){$('#upd').textContent='No se pudo leer piloto.xlsx (use servidor/GitHub Pages o cargue el archivo)'}
+}
+$('#fx').onchange=async e=>{const f=e.target.files[0];if(f){ingest(XLSX.read(await f.arrayBuffer(),{type:'array'}));sig='local'}};
+function ingest(wb){
+  const g=n=>XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.find(s=>s.startsWith(n))],{header:1,raw:true,defval:''});
+  const e=g('00');S.kpi=[4,5,6,7,8].map(x=>e[4][(x-4)*3]);
+  S.ind=e.slice(8).filter(r=>+r[0]>0).map(r=>({id:+r[0],n:r[1],d:r[2],f:r[3],v:+r[4],m:+r[5],s:r[6],a:r[7]}));
+  const v=g('01');S.vh=v[3];S.v=v.slice(4).filter(r=>/^TRP/.test(r[0]));
+  const f=g('02');S.f=f.slice(4).filter(r=>r[0]);
+  const m=g('03');S.mh=m[3];S.m=m.slice(4).filter(r=>r[0]);
+  const c=g('04');S.c=c.slice(4).filter(r=>r[0]);
+  S.d=g('05').slice(4).filter(r=>r[0]);
+  $('#upd').textContent='Sincronizado '+new Date().toLocaleTimeString('es-CO');
+  renderAll();
+}
+function renderAll(){heroKpis();exec();initFilters();viajes();flota();mant();cond();dic();io()}
+
+/* Utilidades de tabla */
+const tbl=(el,head,rows,opt={})=>{$(el).innerHTML='<thead><tr>'+head.map((h,i)=>`<th ${opt.sort?`onclick="${opt.sort}(${i})"`:''}>${esc(h)}</th>`).join('')+'</tr></thead><tbody>'+rows.map((r,ri)=>`<tr ${opt.click?`class="cursor-pointer" onclick="${opt.click}(${ri})"`:''}>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')+'</tbody>'};
+const chip=(t,k)=>`<span class="chip ${k}">${esc(t)}</span>`;
+const sel=(id,all,list)=>{const s=$('#'+id),cur=s.value;s.innerHTML=`<option value="">${all}</option>`+list.map(x=>`<option>${esc(x)}</option>`).join('');s.value=list.includes(cur)?cur:''};
+function openM(h){$('#mb').innerHTML=h;$('#modal').classList.remove('hidden');$('#modal').classList.add('flex')}
+function fb(img,card){if(!img.dataset.t){img.dataset.t=1;const l=img.getAttribute('src').toLowerCase();if(l!==img.getAttribute('src')){img.src=l;return}}
+  card?img.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-truck-moving text-5xl text-azul/40'})):img.remove()}
+function closeM(){$('#modal').classList.add('hidden');$('#modal').classList.remove('flex')}
+const kv=(rows)=>'<div class="grid sm:grid-cols-2 gap-x-6 gap-y-2 mt-3 text-sm">'+rows.map(([k,v])=>`<div class="border-b border-gray-100 py-1"><div class="text-[11px] uppercase text-gris font-semibold">${esc(k)}</div><div class="font-semibold">${v}</div></div>`).join('')+'</div>';
+const kcard=(ic,l,v,c='azul')=>`<div class="card p-4"><i class="fa-solid ${ic} text-${c==='rojo'?'rojo':'azul'}"></i><div class="text-[11px] text-gris font-semibold uppercase mt-2">${l}</div><div class="font-sora font-bold text-xl md:text-2xl mt-0.5">${v}</div></div>`;
+function countUp(){$$('[data-c]').forEach(el=>{const t=+el.dataset.c,pre=el.dataset.p||'',suf=el.dataset.s||'',d=+el.dataset.d||0,t0=performance.now();const st=n=>{const k=Math.min(1,(n-t0)/1100);el.textContent=pre+num(t*(1-Math.pow(1-k,3)),d)+suf;k<1&&requestAnimationFrame(st)};requestAnimationFrame(st)})}
+
+/* 00 Ejecutivo */
+function heroKpis(){const k=S.kpi;$('#heroK').innerHTML=[['Ingresos',mil(k[0])],['Margen',mil(k[1])],['Km',num(k[3])],['Flota',S.f.length+' camiones']].map(([l,v])=>`<div class="card p-3"><div class="text-[10px] text-gris uppercase font-bold">${l}</div><div class="font-sora font-bold text-lg">${v}</div></div>`).join('')}
+function exec(){
+  const k=S.kpi;
+  $('#kpis').innerHTML=[['fa-sack-dollar','Ingresos totales',`<span data-c="${k[0]/1e6}" data-p="$" data-s=" M" data-d="1"></span>`],['fa-chart-line','Margen operativo bruto',`<span data-c="${k[1]/1e6}" data-p="$" data-s=" M" data-d="1"></span>`,'rojo'],['fa-road','Costo promedio / km',`<span data-c="${k[2]}" data-p="$"></span>`],['fa-gauge','Km totales',`<span data-c="${k[3]}"></span>`],['fa-truck-ramp-box','% Km vacíos',`<span data-c="${k[4]*100}" data-s="%" data-d="2"></span>`,'rojo']].map(a=>kcard(a[0],a[1],a[2],a[3])).join('');
+  countUp();
+  const c=S.ind.filter(okT).length;
+  mk('cEst',{type:'doughnut',data:{labels:['Cumplen la meta','Por mejorar'],datasets:[{data:[c,S.ind.length-c],backgroundColor:[A,R],borderWidth:0}]},options:{cutout:'68%',plugins:{legend:{position:'bottom'}}}});
+  mk('cCum',{type:'bar',data:{labels:S.ind.map(i=>'#'+i.id),datasets:[{data:S.ind.map(i=>Math.min(200,Math.round((LOW.has(i.id)?(i.v?i.m/i.v:2):i.v/i.m)*100))),backgroundColor:S.ind.map(i=>okT(i)?A:R),borderRadius:6}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{title:t=>S.ind[t[0].dataIndex].n}}},scales:{y:{title:{display:true,text:'% de la meta'}}}}});
+  drawInd();
+}
+let indFilter='';
+$('#indF').onclick=e=>{const b=e.target.closest('button');if(!b)return;indFilter=b.dataset.f;$$('#indF .pill').forEach(x=>x.classList.toggle('on',x===b));drawInd()};
+function drawInd(){
+  $('#ind').innerHTML=S.ind.filter(i=>!indFilter||i.s===indFilter).map(i=>{const t=okT(i),lo=LOW.has(i.id),p=Math.min(100,(lo?(i.v?i.m/i.v:1):i.v/i.m)*100);
+  return `<div class="card p-5 cursor-pointer" onclick="indM(${i.id})"><div class="flex justify-between items-start gap-2"><div><div class="text-[11px] font-bold text-gris">#${i.id} · ${esc(i.d)}</div><div class="font-bold leading-snug">${esc(i.n)}</div></div>${stat(t)}</div>
+  <div class="grid grid-cols-2 gap-2 mt-3 items-end"><div><div class="text-[10px] uppercase text-gris font-bold">Resultado real</div><div class="font-sora font-bold text-2xl">${fmtI(i.id,i.v)}</div></div><div class="text-right"><div class="text-[10px] uppercase text-gris font-bold">Meta ${lo?'(no pasar de)':'(mínimo)'}</div><div class="font-sora font-bold text-lg text-gris">${fmtI(i.id,i.m)}</div></div></div>
+  <div class="bar mt-3"><i style="width:${p}%;background:${t?A:R}"></i></div>
+  <div class="mt-2 text-xs ${t?'text-azul':'text-rojo'}"><i class="fa-solid ${t?'fa-circle-check':'fa-triangle-exclamation'} mr-1"></i>${t?'Vamos bien.':'Hay que mejorar.'} ${lo?'Aquí lo ideal es un número bajo.':'Aquí lo ideal es un número alto.'}</div></div>`}).join('')}
+function indM(id){const i=S.ind.find(x=>x.id===id),t=okT(i),lo=LOW.has(id);
+  openM(`<h3 class="font-sora font-bold text-xl pr-8">#${i.id} ${esc(i.n)}</h3><div class="mt-2">${stat(t)}</div>`+kv([['Dimensión',esc(i.d)],['Resultado real',fmtI(id,i.v)],[lo?'Meta (no pasar de)':'Meta (mínimo a lograr)',fmtI(id,i.m)],['¿Qué significa?',t?'Estamos cumpliendo la meta.':'Todavía no llegamos a la meta.'],['Acción sugerida',esc(i.a)]]))}
+
+/* Filtros viajes */
+function initFilters(){
+  const u=k=>[...new Set(S.v.map(r=>r[k]))].sort();
+  sel('fMes','Todos los meses',u(2));sel('fPla','Todas las placas',u(3));sel('fCli','Todos los clientes',u(5));
+  sel('mT','Todos los tipos',[...new Set(S.m.map(r=>r[3]))].sort());sel('mP','Todas las placas',[...new Set(S.m.map(r=>r[1]))].sort());sel('mW','Todos los talleres',[...new Set(S.m.map(r=>r[5]))].sort());
+}
+['q','fMes','fPla','fCli','fOtd'].forEach(i=>$('#'+i).addEventListener('input',()=>{vPage=0;viajes()}));
+['mT','mP','mW'].forEach(i=>$('#'+i).addEventListener('input',mant));
+$('#qd').oninput=dic;
+function resetV(){['q','fMes','fPla','fCli','fOtd'].forEach(i=>$('#'+i).value='');vPage=0;viajes()}
+
+/* 01 Viajes */
+function viajes(){
+  const q=$('#q').value.toLowerCase(),m=$('#fMes').value,p=$('#fPla').value,c=$('#fCli').value,o=$('#fOtd').value;
+  vF=S.v.filter(r=>(!m||r[2]===m)&&(!p||r[3]===p)&&(!c||r[5]===c)&&(!o||r[25]===o)&&(!q||r.join(' ').toLowerCase().includes(q)));
+  const [si,sd]=vSort;vF.sort((a,b)=>(a[si]>b[si]?1:a[si]<b[si]?-1:0)*sd);
+  const n=vF.length,ing=sum(vF,r=>r[11]),mar=sum(vF,r=>r[18]),km=sum(vF,r=>r[10]),kv_=sum(vF,r=>r[9]),cost=sum(vF,r=>r[13]+r[14]+r[15]+r[16]+r[17]),otd=n?vF.filter(r=>r[25]==='SÍ').length/n:0;
+  $('#vk').innerHTML=[['fa-clipboard-list','Viajes',num(n)],['fa-sack-dollar','Ingresos',mil(ing)],['fa-chart-line','Margen',mil(mar)+' · '+pc(ing?mar/ing:0)],['fa-road','Costo/km',cop(km?cost/km:0)],['fa-gas-pump','Rend. km/gal',num(sum(vF,r=>r[12])?km/sum(vF,r=>r[12]):0,2)],['fa-clock','OTD',pc(otd)]].map(a=>kcard(...a)).join('');
+  const mes=grp(vF,r=>r[2]),ms=Object.keys(mes).sort();
+  mk('cMes',{data:{labels:ms,datasets:[{type:'bar',label:'Ingresos',data:ms.map(k=>sum(mes[k],r=>r[11])),backgroundColor:A,borderRadius:6},{type:'line',label:'Margen',data:ms.map(k=>sum(mes[k],r=>r[18])),borderColor:R,backgroundColor:R,tension:.35}]}});
+  mk('cCos',{type:'doughnut',data:{labels:['ACPM','Peajes','Conductor','Mantenimiento','Otros'],datasets:[{data:[13,14,15,16,17].map(i=>sum(vF,r=>r[i])),backgroundColor:[A,R,G,'#4a6bb5','#e58a99'],borderWidth:0}]},options:{cutout:'62%',plugins:{legend:{position:'bottom'}}}});
+  const cl=grp(vF,r=>r[5]),ck=Object.keys(cl).sort((a,b)=>sum(cl[b],r=>r[11])-sum(cl[a],r=>r[11]));
+  mk('cCli',{type:'bar',data:{labels:ck,datasets:[{data:ck.map(k=>sum(cl[k],r=>r[11])),backgroundColor:A,borderRadius:6}]},options:{indexAxis:'y',plugins:{legend:{display:false}}}});
+  mk('cOtd',{type:'line',data:{labels:ms,datasets:[{label:'OTD %',data:ms.map(k=>+(mes[k].filter(r=>r[25]==='SÍ').length/mes[k].length*100).toFixed(1)),borderColor:R,backgroundColor:'rgba(202,16,46,.12)',fill:true,tension:.35},{label:'Meta 95%',data:ms.map(()=>95),borderColor:G,borderDash:[6,6],pointRadius:0}]},options:{scales:{y:{min:0,max:100}}}});
+  const ru=grp(vF,r=>r[6]),rk=Object.keys(ru).sort((a,b)=>sum(ru[b],r=>r[18])-sum(ru[a],r=>r[18])).slice(0,12);
+  mk('cRut',{type:'bar',data:{labels:rk,datasets:[{data:rk.map(k=>sum(ru[k],r=>r[18])),backgroundColor:rk.map((_,i)=>i%2?R:A),borderRadius:6}]},options:{plugins:{legend:{display:false}}}});
+  const pgN=Math.max(1,Math.ceil(n/15));vPage=Math.min(vPage,pgN-1);
+  const rows=vF.slice(vPage*15,vPage*15+15);
+  const money=[11,13,14,15,16,17,18];
+  tbl('#tV',S.vh,rows.map(r=>r.map((c,i)=>i===25?chip(c,c==='SÍ'?'ok':'bad'):i===0?`<b>${esc(c)}</b>`:money.includes(i)?cop(c):typeof c==='number'?num(c,1):esc(c))),{sort:'sortV',click:'verV'});
+  $('#pgI').textContent=`Página ${vPage+1} de ${pgN} · ${n} registros (clic en una fila para ver el detalle)`;
+}
+const pg=d=>{vPage=Math.max(0,vPage+d);viajes()};
+const sortV=i=>{vSort=[i,vSort[0]===i?-vSort[1]:1];viajes()};
+function verV(ri){const r=vF[vPage*15+ri];openM(`<h3 class="font-sora font-bold text-xl">${esc(r[0])} · ${esc(r[6])}</h3>`+kv(S.vh.map((h,i)=>[h,[11,13,14,15,16,17,18].includes(i)?cop(r[i]):i===25?chip(r[i],r[i]==='SÍ'?'ok':'bad'):esc(r[i])])))}
+function csv(){const t=[S.vh,...vF].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));a.download='viajes_filtrados.csv';a.click()}
+
+/* 02 Flota */
+let flF='';
+$('#flF').onclick=e=>{const b=e.target.closest('button');if(!b)return;flF=b.dataset.f;$$('#flF .pill').forEach(x=>x.classList.toggle('on',x===b));flota()};
+function flota(){
+  const L=S.f.filter(r=>!flF||String(r[15]).includes(flF));
+  mk('cFl',{type:'bar',data:{labels:S.f.map(r=>r[0]),datasets:[{label:'Disponibilidad mecánica %',data:S.f.map(r=>+(r[8]*100).toFixed(1)),backgroundColor:A,borderRadius:5},{label:'Utilización %',data:S.f.map(r=>+(r[10]*100).toFixed(1)),backgroundColor:R,borderRadius:5}]},options:{scales:{y:{min:60,max:100}}}});
+  $('#fl').innerHTML=L.map(r=>{const rep=/REEMPLAZO/.test(r[15]);return `<div class="card overflow-hidden cursor-pointer" onclick="verF('${r[0]}')">
+  <div class="h-40 bg-gradient-to-br from-azul/10 to-gris/20 flex items-center justify-center"><img src="${esc(r[16])}" alt="${esc(r[0])}" class="w-full h-full object-cover" onerror="fb(this,1)"></div>
+  <div class="p-5"><div class="flex justify-between items-center"><div class="font-sora font-bold text-xl">${esc(r[0])}</div>${chip(r[6],r[6]==='ACTIVO'?'ok':'neu')}</div>
+  <div class="text-sm text-gris">${esc(r[1])} · ${esc(r[2])}</div><div class="text-xs mt-1"><i class="fa-solid fa-user mr-1 text-rojo"></i>${esc(r[5])}</div>
+  <div class="mt-3 text-[11px] font-semibold flex justify-between"><span>Disponibilidad</span><span>${pc(r[8])}</span></div><div class="bar"><i style="width:${r[8]*100}%;background:${A}"></i></div>
+  <div class="mt-2 text-[11px] font-semibold flex justify-between"><span>Utilización</span><span>${pc(r[10])}</span></div><div class="bar"><i style="width:${r[10]*100}%;background:${R}"></i></div>
+  <div class="mt-3">${chip(r[15],rep?'bad':'ok')}</div></div></div>`}).join('')}
+function verF(p){const r=S.f.find(x=>x[0]===p),vs=S.v.filter(x=>x[3]===p);
+  openM(`<img src="${esc(r[16])}" alt="${esc(p)}" class="w-full h-56 object-cover rounded-2xl mb-4 bg-gray-100" onerror="fb(this,0)"><h3 class="font-sora font-bold text-xl">${esc(p)} · ${esc(r[1])}</h3>`+kv([['Modelo',r[2]],['Motor / Config',esc(r[3])],['Km acumulado',num(r[4])+' km'],['Conductor',esc(r[5])],['Estado',esc(r[6])],['Horas disponibles/año',num(r[7])],['Disponibilidad mecánica',pc(r[8])],['Horas operativas',num(r[9])],['Utilización',pc(r[10])],['Ingresos acumulados',cop(r[11])],['Mantenimientos + reparaciones',cop(r[12])],['Costo ciclo de vida',cop(r[13])],['Valor residual estimado',cop(r[14])],['Decisión gerencial',esc(r[15])],['Viajes registrados',vs.length],['Margen acumulado viajes',cop(sum(vs,x=>x[18]))]]))}
+
+/* 03 Mantenimiento */
+function mant(){
+  const t=$('#mT').value,p=$('#mP').value,w=$('#mW').value;
+  const L=S.m.filter(r=>(!t||r[3]===t)&&(!p||r[1]===p)&&(!w||r[5]===w));
+  const prev=L.filter(r=>/Preventivo/.test(r[3]));
+  $('#mk').innerHTML=[['fa-file-lines','Órdenes de trabajo',L.length],['fa-coins','Costo total',mil(sum(L,r=>r[6]))],['fa-hourglass-half','Horas inmovilizado',num(sum(L,r=>r[8]))],['fa-circle-check','Preventivo a tiempo',prev.length?pc(sum(prev,r=>r[7])/prev.length):'—']].map(a=>kcard(...a)).join('');
+  const gt=grp(L,r=>r[3]),tk=Object.keys(gt);
+  mk('cMt',{type:'doughnut',data:{labels:tk,datasets:[{data:tk.map(k=>sum(gt[k],r=>r[6])),backgroundColor:[A,R,G,'#4a6bb5','#e58a99','#6d6d6d'],borderWidth:0}]},options:{cutout:'58%',plugins:{legend:{position:'bottom'}}}});
+  const gw=grp(L,r=>r[5]),wk=Object.keys(gw);
+  mk('cMw',{type:'bar',data:{labels:wk,datasets:[{label:'Horas',data:wk.map(k=>sum(gw[k],r=>r[8])),backgroundColor:A,borderRadius:6},{label:'OT',data:wk.map(k=>gw[k].length),backgroundColor:R,borderRadius:6}]}});
+  tbl('#tM',S.mh,L.map(r=>r.map((c,i)=>i===0?`<b>${esc(c)}</b>`:i===6?cop(c):i===7?chip(c?'A tiempo':'Fuera de tiempo',c?'ok':'bad'):i===10?chip(c,/CERR/.test(c)?'ok':'neu'):i===4?`<span title="${esc(c)}">${esc(String(c).slice(0,42))}…</span>`:typeof c==='number'?num(c):esc(c))));
+}
+
+/* 04 Conductores */
+const sem=v=>v>=85?['SEGURO','#16a34a','#15803d']:v>=70?['PRECAUCIÓN','#f59e0b','#b45309']:['INSEGURO','#CA102E','#CA102E'];
+const semChip=v=>{const [t,c,tc]=sem(v);return `<span class="chip" style="background:${c}1f;color:${tc}"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${c}"></span>${t}</span>`};
+function cond(){
+  const n=S.c.length,avg=sum(S.c,r=>r[8])/n;
+  $('#ck').innerHTML=['SEGURO','PRECAUCIÓN','INSEGURO'].map(k=>{const m=sem(k==='SEGURO'?90:k==='PRECAUCIÓN'?75:50),c=S.c.filter(r=>sem(r[8])[0]===k).length;return `<div class="card p-4 text-center"><span class="inline-block w-5 h-5 rounded-full" style="background:${m[1]}"></span><div class="font-sora font-bold text-3xl mt-1">${c}</div><div class="text-[11px] font-bold uppercase" style="color:${m[2]}">${k}</div><div class="text-[11px] text-gris">de ${n} conductores</div></div>`}).join('')+`<div class="card p-4 text-center"><i class="fa-solid fa-gauge-high text-azul"></i><div class="font-sora font-bold text-3xl mt-1">${num(avg,0)}</div><div class="text-[11px] font-bold uppercase text-azul">Score promedio</div><div class="mt-1">${semChip(avg)}</div></div>`;
+  mk('cSc',{type:'bar',data:{labels:S.c.map(r=>r[0]),datasets:[{data:S.c.map(r=>r[8]),backgroundColor:S.c.map(r=>sem(r[8])[1]),borderRadius:6}]},options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:c=>sem(c.raw)[0]}}},scales:{x:{min:0,max:100,title:{display:true,text:'Score (meta: 85 o más)'}}}}});
+  mk('cEx',{type:'bar',data:{labels:S.c.map(r=>r[1]),datasets:[{label:'Excesos de velocidad',data:S.c.map(r=>r[7]),backgroundColor:A,borderRadius:6},{label:'Incidentes viales',data:S.c.map(r=>r[6]),backgroundColor:R,borderRadius:6}]}});
+  tbl('#tC',['Conductor','Placa','Cédula / ID','PESV','Capacitación','% Descansos','Incidentes','Excesos vel.','Score','Semáforo','Nivel de riesgo'],S.c.map(r=>[`<b>${esc(r[0])}</b>`,esc(r[1]),esc(r[2]),chip(r[3],/VIG/.test(r[3])?'ok':'bad'),chip(r[4],r[4]==='SÍ'?'ok':'bad'),pc(r[5]),r[6],r[7],`<b>${r[8]}</b>`,semChip(r[8]),chip(r[9],r[9]==='ALTO'?'bad':r[9]==='BAJO'?'ok':'neu')]))}
+
+/* 05 Diccionario */
+let dimF='',dOpen=new Set();
+const dIc=d=>/Rentab/.test(d)?'fa-coins':/Rutas/.test(d)?'fa-route':/Manten/.test(d)?'fa-screwdriver-wrench':/Conduct/.test(d)?'fa-id-card-clip':/Tiempos/.test(d)?'fa-hourglass-half':/Combust/.test(d)?'fa-gas-pump':'fa-chart-simple';
+const dMap=[[/costo total/i,1],[/margen/i,2],[/otd/i,10],[/vac[ií]os/i,8],[/disponibilidad/i,5],[/preventivo/i,6],[/score/i,12],[/combustible/i,7]];
+const dL=n=>{const x=dMap.find(([re])=>re.test(n));return x&&S.ind.find(i=>i.id===x[1])};
+function dic(){
+  const q=$('#qd').value.toLowerCase(),dims=[...new Set(S.d.map(r=>r[0]))];
+  $('#dicF').innerHTML=['',...dims].map(d=>`<button class="pill ${d===dimF?'on':''}" data-d="${esc(d)}">${d?`<i class="fa-solid ${dIc(d)} mr-1"></i>${esc(d)}`:'Todas'}</button>`).join('');
+  const L=S.d.filter(r=>(!dimF||r[0]===dimF)&&(!q||r.join(' ').toLowerCase().includes(q)));
+  $('#dicN').textContent=L.length+' de '+S.d.length+' indicadores';
+  $('#dic').innerHTML=L.map(r=>{const k=S.d.indexOf(r),i=dL(r[1]),o=dOpen.has(k);
+    const row=(ic,l,v)=>`<div class="flex gap-3 py-2 border-t border-gray-100"><i class="fa-solid ${ic} text-rojo w-5 text-center mt-0.5"></i><div><div class="text-[11px] uppercase font-bold text-gris">${l}</div><div class="text-sm font-semibold">${v}</div></div></div>`;
+    return `<div class="card p-5 cursor-pointer" onclick="tgD(${k})"><div class="flex items-start gap-3"><div class="w-11 h-11 rounded-2xl bg-azul text-white flex items-center justify-center shrink-0"><i class="fa-solid ${dIc(r[0])}"></i></div>
+    <div class="flex-1 min-w-0"><span class="chip neu">${esc(r[0])}</span><h4 class="font-bold text-lg leading-snug mt-1">${esc(r[1])}</h4></div><i class="fa-solid fa-chevron-down text-gris transition ${o?'rotate-180':''}"></i></div>
+    <div class="mt-3 flex items-center justify-between gap-2 bg-gray-50 rounded-xl px-3 py-2"><span class="text-[11px] uppercase font-bold text-gris">Meta</span><b class="text-azul">${esc(r[5])}</b>${i?stat(okT(i)):''}</div>
+    <div class="${o?'':'hidden'} mt-3">${i?`<div class="rounded-xl p-3 mb-2" style="background:${okT(i)?'#012169':'#CA102E'}12"><div class="text-[11px] uppercase font-bold text-gris">Resultado actual en la flota</div><div class="font-sora font-bold text-2xl">${fmtI(i.id,i.v)}</div></div>`:''}
+    ${row('fa-calculator','¿Cómo se calcula?',esc(r[2]))}${row('fa-database','¿De dónde salen los datos?',esc(r[3]))}${row('fa-calendar-days','¿Cada cuánto se revisa?',esc(r[4]))}${row('fa-user-tie','¿Quién responde?',esc(r[6]))}</div></div>`}).join('')||'<p class="text-gris">No hay resultados.</p>'}
+const tgD=k=>{dOpen.has(k)?dOpen.delete(k):dOpen.add(k);dic()};
+const allD=()=>{if(dOpen.size<S.d.length)S.d.forEach((_,k)=>dOpen.add(k));else dOpen.clear();$('#allT').textContent=dOpen.size?'Cerrar todas':'Abrir todas';dic()};
+$('#dicF').onclick=e=>{const b=e.target.closest('button');if(!b)return;dimF=b.dataset.d;dic()};
+
+/* Animaciones y navegación */
+function io(){const o=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('in')),{threshold:.08});$$('.fade').forEach(x=>o.observe(x));
+  $$('section[id]').forEach(s=>s.querySelector('.h2')?.parentElement?.classList.add('fade'));$$('.fade').forEach(x=>o.observe(x))}
+const so=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&$$('#nav a').forEach(a=>a.classList.toggle('act',a.hash==='#'+e.target.id))),{rootMargin:'-40% 0px -55% 0px'});
+$$('main section').forEach(s=>so.observe(s));
+document.addEventListener('keydown',e=>e.key==='Escape'&&closeM());
+
+load(true);
+setInterval(load,30000);   /* detecta cambios en piloto.xlsx cada 30 s */
+$$('.fade').forEach(x=>x.classList.add('in'));
+</script>
+</body>
+</html>
